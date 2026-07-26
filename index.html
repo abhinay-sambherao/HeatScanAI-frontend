@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HeatScan AI — EVH Platform</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">Heat<span>Scan</span> AI</div>
+  <div class="nav-links">
+    <button class="active" onclick="showView('upload')">Upload</button>
+    <button onclick="showView('products')">Products</button>
+    <button onclick="showView('dashboard')">Dashboard</button>
+  </div>
+  <div class="nav-status">
+    <div class="dot"></div>
+    <span id="status-text">Connected</span>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- UPLOAD VIEW -->
+  <div id="view-upload" class="view active">
+    <div class="card" style="margin-bottom:24px">
+      <div class="card-header">Scan a Heating System</div>
+      <div class="card-body">
+        <div id="upload-zone" class="upload-zone">
+          <div class="icon">&#128247;</div>
+          <h3>Upload a nameplate photo</h3>
+          <p>Drag & drop or click to select an image</p>
+          <div class="formats">
+            <span>JPG</span><span>PNG</span><span>WEBP</span><span>PDF</span>
+          </div>
+          <input type="file" id="file-input" accept="image/*,.pdf">
+        </div>
+
+        <div id="preview-area" style="display:none; margin-top:16px;"></div>
+        <div id="error-area"></div>
+
+        <div style="margin-top:16px; display:flex; gap:8px;">
+          <button id="scan-btn" class="btn btn-primary" disabled onclick="runOCR()">&#9654; Scan Now</button>
+          <button class="btn btn-secondary" onclick="resetUpload()">Clear</button>
+        </div>
+
+        <div id="progress-area" style="display:none; margin-top:20px;"></div>
+      </div>
+    </div>
+
+    <div id="results-area"></div>
+  </div>
+
+  <!-- PRODUCTS VIEW -->
+  <div id="view-products" class="view">
+    <div class="search-bar">
+      <input type="text" id="product-search" placeholder="Search by model, EPREL ID..." onkeyup="debounceSearch()">
+      <button class="btn btn-primary" onclick="loadProducts()">Search</button>
+    </div>
+    <div class="card">
+      <div class="card-header">Product Database</div>
+      <div class="card-body">
+        <div id="products-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div id="view-dashboard" class="view">
+    <div id="dashboard-stats" class="stats-grid"></div>
+    <div class="card" style="margin-bottom:24px">
+      <div class="card-header">Recent OCR Scans</div>
+      <div class="card-body"><div id="ocr-history"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">Manufacturers</div>
+      <div class="card-body"><div id="manufacturers-list"></div></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
