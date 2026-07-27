@@ -1,36 +1,53 @@
-# HeatScan AI Frontend
+# HeatScan AI — Frontend
 
-Standalone frontend for the EVH HeatScan AI Platform.
+Standalone SPA frontend for the HeatScan AI platform. Connects to the [HeatScanAI backend](https://github.com/abhinay-sambherao/HeatScanAI).
 
 ## Quick Start
 
-Open `index.html` in a browser. The backend must be running at `http://127.0.0.1:8000`.
+```bash
+# Option 1: Open directly
+open index.html
 
-To override the backend URL, edit `js/app.js`:
-```js
-const API = 'http://your-backend-url:8000';
+# Option 2: Serve locally
+python3 -m http.server 3000
+# Then open http://localhost:3000
 ```
+
+Backend must be running at `http://127.0.0.1:8000`.
+
+## Features
+
+- **Upload Tab** — Drag-and-drop nameplate photo → OCR scan → product matches
+- **Products Tab** — Search and browse the EPREL product database
+- **Dashboard Tab** — Scan history, manufacturer stats, system metrics
 
 ## Project Structure
 
 ```
-├── index.html        # Main SPA entry point
+├── index.html        # SPA entry point
 ├── css/
-│   └── style.css     # All styles
+│   └── style.css     # All styles (EVH red theme)
 ├── js/
 │   └── app.js        # All application logic
 ├── images/           # Static assets
+├── README.md
 └── .gitignore
 ```
 
-## Features
+## Configuration
 
-- **Upload** — OCR scan of heating system nameplates
-- **Products** — Search and browse the product database
-- **Dashboard** — Scan history, manufacturer stats, system metrics
+Edit the API URL in `js/app.js`:
+```js
+const API = 'http://your-backend-url:8000';
+```
 
-## Environment
+## Tech
 
-Requires:
-- Modern browser (Chrome, Firefox, Safari, Edge)
-- Backend API at configured URL (`http://127.0.0.1:8000` by default)
+- Vanilla HTML/CSS/JS (no framework dependencies)
+- Fetch API for backend communication
+- Responsive design (mobile-friendly)
+- EVH brand colors (red #E40000)
+
+## Related
+
+- [HeatScanAI Backend](https://github.com/abhinay-sambherao/HeatScanAI) — FastAPI + PaddleOCR + PostgreSQL
