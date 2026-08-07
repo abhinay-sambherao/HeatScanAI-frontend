@@ -874,13 +874,21 @@ async function loadDashboard() {
 }
 
 // ─── INIT ──────────────────────────────────────────────
-fetch(`${API}/health`).then(r => r.json()).then(d => {
-  document.getElementById('status-text').textContent = t('connected');
-  initProductBrowser();
-}).catch(() => {
-  document.getElementById('status-text').textContent = t('disconnected');
-  document.querySelector('.nav-status .dot').style.background = 'var(--danger)';
-});
+function checkHealth(attemptsLeft) {
+  attemptsLeft = attemptsLeft === undefined ? 3 : attemptsLeft;
+  fetch(`${API}/health`).then(r => r.json()).then(d => {
+    document.getElementById('status-text').textContent = t('connected');
+    initProductBrowser();
+  }).catch(() => {
+    if (attemptsLeft > 1) {
+      setTimeout(() => checkHealth(attemptsLeft - 1), 1500);
+    } else {
+      document.getElementById('status-text').textContent = t('disconnected');
+      document.querySelector('.nav-status .dot').style.background = 'var(--danger)';
+    }
+  });
+}
+checkHealth();
 
 // Apply i18n on load, show GDPR if needed
 applyI18n();
