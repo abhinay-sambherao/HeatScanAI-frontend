@@ -234,6 +234,9 @@ tr:hover td { background: rgba(0,0,0,.01); }
 
 /* RESPONSIVE */
 @media (max-width: 640px) {
+  .search-bar { flex-wrap: wrap; }
+  .search-bar input { flex: 1 1 100%; }
+  .search-bar .btn { flex: 1 1 45%; justify-content: center; }
   .upload-actions { flex-direction: column; }
   .divider { padding: 8px 0; }
   .nav { padding: 0 12px; gap: 8px; flex-wrap: wrap; height: auto; min-height: 52px; }
