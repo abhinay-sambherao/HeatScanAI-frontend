@@ -1,4 +1,6 @@
-const API = 'http://127.0.0.1:8000';
+// API base URL — override via <script>window.__API__='...'</script> (e.g. a Netlify
+// snippet / env var) or a deployed tunnel URL; defaults to the local backend.
+const API = (typeof window !== 'undefined' && window.__API__) || 'http://127.0.0.1:8000';
 let selectedFiles = [];
 let locationData = { latitude: null, longitude: null, address: null, city: null, installation_year: null };
 let cameraStream = null;
@@ -470,13 +472,12 @@ function getGPSLocation() {
     pos => {
       locationData.latitude = pos.coords.latitude;
       locationData.longitude = pos.coords.longitude;
-      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&zoom=10`)
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&zoom=18`)
         .then(r => r.json())
         .then(d => {
-          if (d.address) {
-            locationData.city = d.address.city || d.address.town || d.address.village || d.address.municipality || '';
-            locationData.address = d.address.road ? `${d.address.road}${d.address.house_number ? ' ' + d.address.house_number : ''}` : '';
-          }
+          const a = (d && d.address) || {};
+          locationData.city = a.city || a.town || a.village || a.municipality || a.city_district || a.suburb || a.county || a.state || null;
+          locationData.address = a.road ? `${a.road}${a.house_number ? ' ' + a.house_number : ''}` : null;
         })
         .catch(() => {})
         .finally(() => closeLocation(false));
@@ -529,13 +530,14 @@ async function runOCR() {
     <div class="progress-steps" id="progress-steps"></div>`;
 
   let stepIdx = 0;
+  const totalSteps = steps.length - 1;  // "Done!" only shown once the response arrives
   const stepInterval = setInterval(() => {
-    if (stepIdx < steps.length) {
+    if (stepIdx < totalSteps) {
       const el = document.getElementById('progress-steps');
       el.innerHTML = steps.slice(0, stepIdx + 1).map((s, i) =>
         `<div class="step ${i < stepIdx ? 'done' : ''}"><span class="check">${i < stepIdx ? '&#10003;' : '&#9679;'}</span> ${s}</div>`
       ).join('');
-      document.getElementById('progress-fill').style.width = ((stepIdx + 1) / steps.length * 100) + '%';
+      document.getElementById('progress-fill').style.width = Math.round((stepIdx + 1) / steps.length * 100) + '%';
       stepIdx++;
     }
   }, 400);
@@ -561,6 +563,9 @@ async function runOCR() {
 
     const data = await res.json();
     document.getElementById('progress-fill').style.width = '100%';
+    document.getElementById('progress-steps').innerHTML = steps.map((s) =>
+      `<div class="step done"><span class="check">&#10003;</span> ${s}</div>`
+    ).join('');
     setTimeout(() => { progressArea.style.display = 'none'; }, 500);
     renderResults(data);
   } catch (err) {
