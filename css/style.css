@@ -239,9 +239,11 @@ tr:hover td { background: rgba(0,0,0,.01); }
   .search-bar .btn { flex: 1 1 45%; justify-content: center; }
   .upload-actions { flex-direction: column; }
   .divider { padding: 8px 0; }
-  .nav { padding: 0 12px; gap: 8px; flex-wrap: wrap; height: auto; min-height: 52px; }
-  .nav-links button { padding: 6px 10px; font-size: 12px; }
+  .nav { padding: 10px 16px; gap: 12px; flex-wrap: wrap; height: auto; }
+  .nav-brand { margin-right: auto; }
   .nav-right { gap: 4px; }
+  .nav-links { order: 3; flex-basis: 100%; display: flex; gap: 6px; padding-top: 10px; margin-top: 4px; border-top: 1px solid var(--border); }
+  .nav-links button { flex: 1; padding: 9px 6px; font-size: 13px; text-align: center; white-space: nowrap; }
   .container { padding: 16px 12px; }
   .fields-grid { grid-template-columns: 1fr 1fr; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
