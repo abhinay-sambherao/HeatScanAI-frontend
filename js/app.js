@@ -647,6 +647,9 @@ function renderResults(data) {
         <div class="fields-grid">
           <div class="field-item"><div class="label">${t('manufacturer')}</div><div class="value">${data.manufacturer || t('not_detected')}</div></div>
           <div class="field-item"><div class="label">${t('model')}</div><div class="value">${data.model || t('not_detected')}</div></div>
+          <div class="field-item"><div class="label">${t('energy')}</div><div class="value">${data.energy_class || '-'}</div></div>
+          <div class="field-item"><div class="label">${t('fuel')}</div><div class="value">${data.fuel_type ? (t('fuel_' + data.fuel_type) || data.fuel_type) : '-'}</div></div>
+          <div class="field-item"><div class="label">${t('output')}</div><div class="value">${data.heat_output || '-'}</div></div>
           <div class="field-item"><div class="label">${t('ocr_confidence')}</div><div class="value">${data.confidence.toFixed(1)}%</div></div>
           <div class="field-item"><div class="label">${t('matches_found')}</div><div class="value">${data.matches ? data.matches.length : 0}</div></div>
           ${imageCountHtml}
