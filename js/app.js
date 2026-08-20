@@ -303,10 +303,17 @@ function toggleLang() {
   localStorage.setItem('heatscan_lang', next);
   // Remove done markers so applyI18n re-applies
   document.querySelectorAll('[data-i18n-done]').forEach(el => el.removeAttribute('data-i18n-done'));
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => el.removeAttribute('data-i18n-done'));
   applyI18n();
   // Refresh dynamic content
   if (document.getElementById('view-products').classList.contains('active')) loadProducts();
   if (document.getElementById('view-dashboard').classList.contains('active')) loadDashboard();
+  // Re-render scan results if present (they use t() calls)
+  const resultsArea = document.getElementById('results-area');
+  if (resultsArea && resultsArea.innerHTML.trim()) {
+    const lastScanData = window._lastScanData;
+    if (lastScanData) renderResults(lastScanData);
+  }
 }
 
 // ─── GDPR ──────────────────────────────────────────────
@@ -392,6 +399,7 @@ function resetUpload() {
   selectedFiles.forEach(f => URL.revokeObjectURL(f));
   selectedFiles = [];
   locationData = { latitude: null, longitude: null, address: null, postal_code: null, city: null, installation_year: null };
+  window._lastScanData = null;
   document.getElementById('preview-area').style.display = 'none';
   document.getElementById('preview-area').innerHTML = '';
   document.getElementById('progress-area').style.display = 'none';
@@ -626,6 +634,7 @@ async function runOCR() {
 }
 
 function renderResults(data) {
+  window._lastScanData = data;
   const area = document.getElementById('results-area');
   const uploadCard = document.getElementById('upload-card');
   if (uploadCard) uploadCard.style.display = 'none';
