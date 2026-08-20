@@ -549,23 +549,40 @@ async function runOCR() {
   resultsArea.innerHTML = '';
 
   const steps = t('scanning_steps');
+  const stepIcons = ['&#128247;', '&#129504;', '&#9997;', '&#128269;', '&#128202;', '&#10004;'];
   progressArea.style.display = 'block';
   progressArea.innerHTML = `
-    <div class="progress-bar"><div class="fill" id="progress-fill" style="width:0%"></div></div>
-    <div class="progress-steps" id="progress-steps"></div>`;
+    <div class="scan-progress">
+      <div class="scan-visual">
+        <div class="scan-ring"></div>
+        <div class="scan-ring-active"></div>
+        <div class="scan-icon" id="scan-main-icon">${stepIcons[0]}</div>
+      </div>
+      <div class="progress-bar"><div class="fill" id="progress-fill" style="width:0%"></div></div>
+      <div class="scan-steps" id="progress-steps"></div>
+    </div>`;
 
   let stepIdx = 0;
-  const totalSteps = steps.length - 1;  // "Done!" only shown once the response arrives
+  const totalSteps = steps.length - 1;
+  const stepTimes = [];
+  const stepStart = Date.now();
   const stepInterval = setInterval(() => {
     if (stepIdx < totalSteps) {
+      stepTimes[stepIdx] = ((Date.now() - stepStart) / 1000).toFixed(1);
       const el = document.getElementById('progress-steps');
-      el.innerHTML = steps.slice(0, stepIdx + 1).map((s, i) =>
-        `<div class="step ${i < stepIdx ? 'done' : ''}"><span class="check">${i < stepIdx ? '&#10003;' : '&#9679;'}</span> ${s}</div>`
-      ).join('');
+      el.innerHTML = steps.slice(0, stepIdx + 1).map((s, i) => {
+        const isDone = i < stepIdx;
+        const isActive = i === stepIdx;
+        const cls = isDone ? 'done' : isActive ? 'active' : '';
+        const icon = isDone ? '&#10003;' : stepIcons[i] || '&#9679;';
+        const time = stepTimes[i] ? stepTimes[i] + 's' : '';
+        return `<div class="scan-step ${cls}" style="animation-delay:${i * 0.08}s"><span class="step-icon">${icon}</span><span class="step-label">${s}</span>${time ? `<span class="step-time">${time}</span>` : ''}</div>`;
+      }).join('');
       document.getElementById('progress-fill').style.width = Math.round((stepIdx + 1) / steps.length * 100) + '%';
+      document.getElementById('scan-main-icon').innerHTML = stepIcons[stepIdx + 1] || stepIcons[stepIdx];
       stepIdx++;
     }
-  }, 400);
+  }, 600);
 
   try {
     const formData = new FormData();
@@ -589,8 +606,9 @@ async function runOCR() {
 
     const data = await res.json();
     document.getElementById('progress-fill').style.width = '100%';
-    document.getElementById('progress-steps').innerHTML = steps.map((s) =>
-      `<div class="step done"><span class="check">&#10003;</span> ${s}</div>`
+    document.getElementById('scan-main-icon').innerHTML = '&#10004;';
+    document.getElementById('progress-steps').innerHTML = steps.map((s, i) =>
+      `<div class="scan-step done" style="animation-delay:${i * 0.05}s"><span class="step-icon">&#10003;</span><span class="step-label">${s}</span></div>`
     ).join('');
     setTimeout(() => { progressArea.style.display = 'none'; }, 500);
     renderResults(data);
