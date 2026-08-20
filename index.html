@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HeatScan AI — EVH Plattform</title>
+<title>heizungcheck — EVH Plattform</title>
 <script>window.__API__ = '';</script>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -35,7 +35,7 @@
 </div>
 
 <nav class="nav">
-  <div class="nav-brand">Heat<span>Scan</span> AI</div>
+  <div class="nav-brand">heizung<span>check</span></div>
   <div class="nav-links">
     <button class="active" onclick="showView('upload')" data-i18n="nav_upload">Upload</button>
     <button onclick="showView('products')" data-i18n="nav_products">Produkte</button>
@@ -55,7 +55,7 @@
 
   <!-- UPLOAD VIEW -->
   <div id="view-upload" class="view active">
-    <div class="card" style="margin-bottom:24px">
+    <div id="upload-card" class="card" style="margin-bottom:24px">
       <div class="card-header" data-i18n="scan_header">Heizungsscanner</div>
       <div class="card-body">
         <p class="guide-prompt">
@@ -198,6 +198,7 @@
       <div id="manual-location-form" style="display:none;margin-top:16px;">
         <div class="form-row">
           <input type="text" id="loc-address" data-i18n-placeholder="loc_addr_ph" placeholder="Straße" class="form-input">
+          <input type="text" id="loc-postal" data-i18n-placeholder="loc_postal_ph" placeholder="PLZ" class="form-input" style="max-width:120px;">
           <input type="text" id="loc-city" data-i18n-placeholder="loc_city_ph" placeholder="Stadt" class="form-input">
         </div>
         <div class="form-row">

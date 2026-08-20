@@ -2,7 +2,7 @@
 // snippet / env var) or a deployed tunnel URL; defaults to the local backend.
 const API = (typeof window !== 'undefined' && window.__API__) || 'http://127.0.0.1:8000';
 let selectedFiles = [];
-let locationData = { latitude: null, longitude: null, address: null, city: null, installation_year: null };
+let locationData = { latitude: null, longitude: null, address: null, postal_code: null, city: null, installation_year: null };
 let cameraStream = null;
 
 // ─── I18N ──────────────────────────────────────────────
@@ -57,6 +57,7 @@ const translations = {
     loc_manual: 'Manuell eingeben',
     skip: 'Überspringen',
     loc_addr_ph: 'Straße',
+    loc_postal_ph: 'PLZ',
     loc_city_ph: 'Stadt',
     loc_lat_ph: 'Breitengrad (optional)',
     loc_lng_ph: 'Längengrad (optional)',
@@ -74,6 +75,7 @@ const translations = {
     scan_results: 'Scan-Ergebnisse',
     confidence: 'Konfidenz',
     match: 'Übereinstimmung',
+    retry: 'Neuer Scan',
     scanning_steps: ['Bild wird hochgeladen...', 'Vorverarbeitung (OpenCV)...', 'OCR läuft (PaddleOCR)...', 'Felder extrahieren...', 'Produkte abgleichen...', 'Fertig!'],
     uploading: 'Bild wird hochgeladen...',
     preprocessing: 'Vorverarbeitung (OpenCV)...',
@@ -117,11 +119,19 @@ const translations = {
     guide_tip2: 'Sorgen Sie für gleichmäßige Beleuchtung ohne Spiegelungen',
     guide_tip3: 'Reinigen Sie das Typenschild falls nötig mit einem trockenen Tuch',
     guide_tip4: 'Machen Sie mehrere Fotos aus verschiedenen Winkeln — das System wählt automatisch die beste Erkennung aus',
+    save: 'Speichern',
     images_count: '{n} Bilder',
     per_image_results: 'Einzelergebnisse anzeigen',
     hide_per_image: 'Einzelergebnisse ausblenden',
     img_uploaded: 'Hochgeladen',
     multi_hint: 'Wählen Sie mehrere Bilder aus verschiedenen Winkeln für optimale Ergebnisse',
+    year_of_install: 'Baujahr',
+    data_title: 'Daten zu Ihrem Heizsystem',
+    address_title: 'Adresse',
+    alt_title: 'Alternative Treffer',
+    alt_disclaimer: 'Wir konnten Ihr System nicht exakt unserer Datenbank zuordnen. Daher zeigen wir den wahrscheinlichsten Treffer. Klicken Sie auf einen der folgenden Treffer, um die Ergebnisse anzuzeigen.',
+    privacy_notice: 'Um Sie optimal zu Ihrer Heizung beraten zu können, verwenden wir für die Berechnung intern weitere Gebäudedaten, die basierend auf Ihrer Adresse ermittelt werden.',
+    seems_incorrect: 'Scheint falsch zu sein? Helfen Sie uns, es zu verbessern',
   },
   en: {
     gdpr_title: 'Privacy Notice',
@@ -173,6 +183,7 @@ const translations = {
     loc_manual: 'Enter Manually',
     skip: 'Skip',
     loc_addr_ph: 'Street address',
+    loc_postal_ph: 'Postal code',
     loc_city_ph: 'City',
     loc_lat_ph: 'Latitude (optional)',
     loc_lng_ph: 'Longitude (optional)',
@@ -190,6 +201,7 @@ const translations = {
     scan_results: 'Scan Results',
     confidence: 'Confidence',
     match: 'Match',
+    retry: 'Retry',
     scanning_steps: ['Uploading image...', 'Preprocessing (OpenCV)...', 'Running OCR (PaddleOCR)...', 'Extracting fields...', 'Matching products...', 'Done!'],
     uploading: 'Uploading image...',
     preprocessing: 'Preprocessing (OpenCV)...',
@@ -233,16 +245,24 @@ const translations = {
     guide_tip2: 'Ensure even lighting without reflections',
     guide_tip3: 'Clean the nameplate with a dry cloth if necessary',
     guide_tip4: 'Take multiple photos from different angles — the system will automatically pick the best results',
+    save: 'Save',
     images_count: '{n} images',
     per_image_results: 'Show per-image results',
     hide_per_image: 'Hide per-image results',
     img_uploaded: 'Uploaded',
     multi_hint: 'Select multiple images from different angles for optimal results',
+    year_of_install: 'Year of installation',
+    data_title: 'Data about your heating system',
+    address_title: 'Address',
+    alt_title: 'Alternative Matches',
+    alt_disclaimer: 'We couldn\'t perfectly match your system to our database, so we show you the most likely one. Here, you can see other possible matches. Click on them to see their results.',
+    privacy_notice: 'In order to provide you with the best possible advice regarding your heating system, we use additional building data for our internal calculations, which is determined based on your address.',
+    seems_incorrect: 'Seems incorrect? Help us improve',
   },
 };
 
 function getLang() {
-  return localStorage.getItem('heatscan_lang') || (navigator.language && navigator.language.startsWith('de') ? 'de' : 'de');
+  return localStorage.getItem('heatscan_lang') || (navigator.language && navigator.language.startsWith('de') ? 'de' : 'en');
 }
 
 function t(key, vars) {
@@ -368,13 +388,15 @@ function removeFile(index) {
 function resetUpload() {
   selectedFiles.forEach(f => URL.revokeObjectURL(f));
   selectedFiles = [];
-  locationData = { latitude: null, longitude: null, address: null, city: null, installation_year: null };
+  locationData = { latitude: null, longitude: null, address: null, postal_code: null, city: null, installation_year: null };
   document.getElementById('preview-area').style.display = 'none';
   document.getElementById('preview-area').innerHTML = '';
   document.getElementById('progress-area').style.display = 'none';
   document.getElementById('results-area').innerHTML = '';
   document.getElementById('error-area').innerHTML = '';
   document.getElementById('scan-btn').disabled = true;
+  const uploadCard = document.getElementById('upload-card');
+  if (uploadCard) uploadCard.style.display = '';
   zone.style.display = 'block';
   fileInput.value = '';
 }
@@ -382,7 +404,7 @@ function resetUpload() {
 function getLocationSummary() {
   const l = locationData;
   const loc = l.city || l.address || (l.latitude && l.longitude ? `${l.latitude.toFixed(4)}, ${l.longitude.toFixed(4)}` : l.latitude ? `${l.latitude.toFixed(4)}` : null);
-  const yr = l.installation_year ? `Baujahr ${l.installation_year}` : null;
+  const yr = l.installation_year ? `${t('year_of_install')} ${l.installation_year}` : null;
   return [loc, yr].filter(Boolean).join(' · ');
 }
 
@@ -431,7 +453,7 @@ function showLocationPrompt() {
 function closeLocation(skipped) {
   document.getElementById('location-modal').style.display = 'none';
   if (skipped) {
-    locationData = { latitude: null, longitude: null, address: null, city: null, installation_year: null };
+    locationData = { latitude: null, longitude: null, address: null, postal_code: null, city: null, installation_year: null };
   } else {
     const yr = parseInt(document.getElementById('loc-installation-year').value, 10);
     locationData.installation_year = (isNaN(yr) || yr < 1980 || yr > 2030) ? null : yr;
@@ -439,6 +461,7 @@ function closeLocation(skipped) {
   // Reset modal fields
   document.getElementById('loc-installation-year').value = '';
   document.getElementById('loc-address').value = '';
+  document.getElementById('loc-postal').value = '';
   document.getElementById('loc-city').value = '';
   document.getElementById('loc-latitude').value = '';
   document.getElementById('loc-longitude').value = '';
@@ -477,6 +500,7 @@ function getGPSLocation() {
         .then(d => {
           const a = (d && d.address) || {};
           locationData.city = a.city || a.town || a.village || a.municipality || a.city_district || a.suburb || a.county || a.state || null;
+          locationData.postal_code = a.postcode || null;
           locationData.address = a.road ? `${a.road}${a.house_number ? ' ' + a.house_number : ''}` : null;
         })
         .catch(() => {})
@@ -496,6 +520,7 @@ function showManualLocation() {
 
 function confirmManualLocation() {
   locationData.address = document.getElementById('loc-address').value || null;
+  locationData.postal_code = document.getElementById('loc-postal').value || null;
   locationData.city = document.getElementById('loc-city').value || null;
   const lat = parseFloat(document.getElementById('loc-latitude').value);
   const lng = parseFloat(document.getElementById('loc-longitude').value);
@@ -550,6 +575,7 @@ async function runOCR() {
     if (locationData.latitude != null) formData.append('latitude', locationData.latitude);
     if (locationData.longitude != null) formData.append('longitude', locationData.longitude);
     if (locationData.address) formData.append('address', locationData.address);
+    if (locationData.postal_code) formData.append('postal_code', locationData.postal_code);
     if (locationData.city) formData.append('city', locationData.city);
     if (locationData.installation_year) formData.append('installation_year', locationData.installation_year);
 
@@ -580,17 +606,65 @@ async function runOCR() {
 
 function renderResults(data) {
   const area = document.getElementById('results-area');
+  const uploadCard = document.getElementById('upload-card');
+  if (uploadCard) uploadCard.style.display = 'none';
   const confClass = data.confidence >= 70 ? 'confidence-high' : data.confidence >= 40 ? 'confidence-medium' : 'confidence-low';
 
-  let imageCountHtml = '';
-  if (data.images && data.images.length > 0) {
-    imageCountHtml = `<div class="field-item"><div class="label">${t('images_count', { n: '' }).trim() || 'Images'}</div><div class="value">${data.images.length}</div></div>`;
+  // Images
+  let imagesHtml = '';
+  if (selectedFiles.length) {
+    const imgs = selectedFiles.map(f => `<img src="${URL.createObjectURL(f)}" alt="${f.name}">`).join('');
+    imagesHtml = `<div class="results-images"><div class="results-gallery">${imgs}</div></div>`;
   }
 
-  let matchesHtml = '';
-  if (data.matches && data.matches.length) {
-    matchesHtml = data.matches.map(m => `
-      <div class="match-card">
+  // Address box
+  const addrLines = [];
+  if (data.address) addrLines.push(data.address);
+  const cityLine = [data.postal_code, data.city].filter(Boolean).join(' ');
+  if (cityLine) addrLines.push(cityLine);
+  if (data.installation_year) addrLines.push(`${t('year_of_install')} ${data.installation_year}`);
+
+  let mapHtml = '';
+  if (data.latitude && data.longitude) {
+    const lat = data.latitude, lng = data.longitude;
+    mapHtml = `<div class="address-map">
+      <iframe width="100%" height="180" frameborder="0" style="border:0;border-radius:8px;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+        src="https://www.openstreetmap.org/export/embed.html?bbox=${lng-0.005},${lat-0.003},${lng+0.005},${lat+0.003}&layer=mapnik&marker=${lat},${lng}">
+      </iframe>
+    </div>`;
+  }
+
+  const addressBox = `
+    <div class="results-box">
+      <div class="box-title">${t('address_title')}</div>
+      ${addrLines.length
+        ? addrLines.map(p => `<div class="box-field"><span class="val">${p}</span></div>`).join('')
+        : `<div class="box-field"><span class="lbl" style="font-style:italic;">${t('not_detected')}</span></div>`}
+      ${mapHtml}
+      <button class="btn-correct" onclick="editResults('address')">&#9998; ${t('seems_incorrect')}</button>
+    </div>`;
+
+  // Data box
+  const dataFields = [
+    { lbl: t('manufacturer'), val: data.manufacturer || t('not_detected') },
+    { lbl: t('model'), val: data.model || t('not_detected') },
+    { lbl: t('energy'), val: data.energy_class || '-' },
+    { lbl: t('fuel'), val: data.fuel_type ? (t('fuel_' + data.fuel_type) || data.fuel_type) : '-' },
+    { lbl: t('output'), val: data.heat_output || '-' },
+    { lbl: t('ocr_confidence'), val: data.confidence.toFixed(1) + '%' },
+  ];
+  const dataBox = `
+    <div class="results-box">
+      <div class="box-title">${t('data_title')}</div>
+      ${dataFields.map(f => `<div class="box-field"><span class="lbl">${f.lbl}</span><span class="val">${f.val}</span></div>`).join('')}
+      <button class="btn-correct" onclick="editResults('data')">&#9998; ${t('seems_incorrect')}</button>
+    </div>`;
+
+  // Alternatives
+  let alternativesHtml = '';
+  if (data.matches && data.matches.length > 0) {
+    const matchCards = data.matches.map((m, i) => `
+      <div class="match-card" ${i > 0 ? 'style="opacity:.85;"' : ''}>
         <div class="match-header">
           <h4>${m.manufacturer} ${m.model}</h4>
           <span class="match-score">${m.score.toFixed(1)}% ${t('match')}</span>
@@ -602,25 +676,43 @@ function renderResults(data) {
         </div>
         ${m.reason ? `<div class="match-reason">${m.reason}</div>` : ''}
       </div>`).join('');
+    alternativesHtml = `
+      <div class="alternatives-section">
+        <div class="alt-title">${t('alt_title')}</div>
+        <div class="alt-disclaimer">${t('alt_disclaimer')}</div>
+        ${matchCards}
+      </div>`;
   } else {
-    matchesHtml = `<div class="empty"><div class="icon">&#128269;</div><p>${t('no_matches')}</p></div>`;
+    alternativesHtml = `
+      <div class="alternatives-section">
+        <div class="empty"><div class="icon">&#128269;</div><p>${t('no_matches')}</p></div>
+      </div>`;
   }
 
-  let locHtml = '';
-  if (data.latitude || data.longitude || data.city || data.address || data.installation_year) {
-    const parts = [];
-    if (data.address) parts.push(data.address);
-    if (data.city) parts.push(data.city);
-    if (data.latitude && data.longitude) parts.push(`${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`);
-    else if (data.latitude) parts.push(`Lat: ${data.latitude.toFixed(4)}`);
-    else if (data.longitude) parts.push(`Lng: ${data.longitude.toFixed(4)}`);
-    if (data.installation_year) parts.push(`Baujahr ${data.installation_year}`);
-    if (parts.length) {
-      locHtml = `<div class="field-item"><div class="label">${t('location')}</div><div class="value">${parts.join(' · ')}</div></div>`;
-    }
-  }
+  // Confidence badge
+  const confBadge = `<span class="confidence-badge ${confClass}" style="float:right;margin-top:4px;">${data.confidence.toFixed(0)}% ${t('confidence')}</span>`;
 
-  let perImageHtml = '';
+  area.innerHTML = `
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-body" style="padding:16px 20px;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <h2 style="font-size:18px;margin:0;">${t('scan_results')}</h2>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="confidence-badge ${confClass}">${data.confidence.toFixed(0)}% ${t('confidence')}</span>
+            <button class="btn btn-primary" onclick="resetUpload()" style="padding:6px 16px;font-size:13px;">&#8635; ${t('retry')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    ${imagesHtml}
+    <div class="results-columns">
+      ${addressBox}
+      ${dataBox}
+    </div>
+    <div class="privacy-notice">${t('privacy_notice')}</div>
+    ${alternativesHtml}`;
+
+  // Per-image detail toggle (if multi-image)
   if (data.images && data.images.length > 1) {
     const imgCards = data.images.map(img => `
       <div class="per-image-card">
@@ -632,38 +724,17 @@ function renderResults(data) {
         <div class="img-field"><span class="lbl">${t('fuel')}</span><span class="val">${img.fuel_type || '-'}</span></div>
         <div class="img-field"><span class="lbl">${t('output')}</span><span class="val">${img.heat_output || '-'}</span></div>
       </div>`).join('');
-    perImageHtml = `
-      <button class="per-image-toggle" onclick="togglePerImage(this)" data-open="false">${t('per_image_results')} (${data.images.length})</button>
-      <div class="per-image-grid" style="display:none;">${imgCards}</div>`;
+    const perImgBtn = `<button class="per-image-toggle" onclick="togglePerImage(this)" data-open="false">${t('per_image_results')} (${data.images.length})</button>`;
+    const perImgGrid = `<div class="per-image-grid" style="display:none;">${imgCards}</div>`;
+    area.insertAdjacentHTML('beforeend', `<div style="margin-top:20px;">${perImgBtn}${perImgGrid}</div>`);
   }
 
-  area.innerHTML = `
-    <div class="card">
-      <div class="card-body">
-        <div class="result-header">
-          <h2>${t('scan_results')}</h2>
-          <span class="confidence-badge ${confClass}">${data.confidence.toFixed(0)}% ${t('confidence')}</span>
-        </div>
-        <div class="fields-grid">
-          <div class="field-item"><div class="label">${t('manufacturer')}</div><div class="value">${data.manufacturer || t('not_detected')}</div></div>
-          <div class="field-item"><div class="label">${t('model')}</div><div class="value">${data.model || t('not_detected')}</div></div>
-          <div class="field-item"><div class="label">${t('energy')}</div><div class="value">${data.energy_class || '-'}</div></div>
-          <div class="field-item"><div class="label">${t('fuel')}</div><div class="value">${data.fuel_type ? (t('fuel_' + data.fuel_type) || data.fuel_type) : '-'}</div></div>
-          <div class="field-item"><div class="label">${t('output')}</div><div class="value">${data.heat_output || '-'}</div></div>
-          <div class="field-item"><div class="label">${t('ocr_confidence')}</div><div class="value">${data.confidence.toFixed(1)}%</div></div>
-          <div class="field-item"><div class="label">${t('matches_found')}</div><div class="value">${data.matches ? data.matches.length : 0}</div></div>
-          ${imageCountHtml}
-          ${locHtml}
-        </div>
-        <h3 style="font-size:15px; margin-bottom:12px;">${t('product_matches')}</h3>
-        ${matchesHtml}
-        ${perImageHtml}
-        <details style="margin-top:16px;">
-          <summary style="cursor:pointer; font-size:13px; color:var(--text-secondary);">${t('show_raw_ocr')}</summary>
-          <div class="raw-text">${data.raw_text || t('raw_ocr_empty')}</div>
-        </details>
-      </div>
-    </div>`;
+  // Raw OCR toggle
+  area.insertAdjacentHTML('beforeend', `
+    <details style="margin-top:16px;">
+      <summary style="cursor:pointer; font-size:13px; color:var(--text-secondary);">${t('show_raw_ocr')}</summary>
+      <div class="raw-text">${data.raw_text || t('raw_ocr_empty')}</div>
+    </details>`);
 }
 
 function togglePerImage(btn) {
@@ -672,6 +743,41 @@ function togglePerImage(btn) {
   grid.style.display = isOpen ? 'none' : 'grid';
   btn.setAttribute('data-open', isOpen ? 'false' : 'true');
   btn.textContent = isOpen ? t('per_image_results') + ' (' + grid.children.length + ')' : t('hide_per_image');
+}
+
+function editResults(section) {
+  const area = document.getElementById('results-area');
+  // Find which box was clicked and make its fields editable
+  const boxes = area.querySelectorAll('.results-box');
+  const box = section === 'address' ? boxes[0] : boxes[1];
+  if (!box) return;
+
+  const fields = box.querySelectorAll('.box-field');
+  fields.forEach(f => {
+    const val = f.querySelector('.val');
+    if (!val) return;
+    const current = val.textContent;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = current === t('not_detected') || current === '-' ? '' : current;
+    input.className = 'edit-input';
+    val.replaceWith(input);
+  });
+
+  // Replace the correct button with save/cancel
+  const btn = box.querySelector('.btn-correct');
+  if (btn) {
+    btn.outerHTML = `
+      <div class="edit-actions">
+        <button class="btn btn-primary btn-sm" onclick="saveEdit('${section}')">&#10003; ${t('save')}</button>
+        <button class="btn btn-secondary btn-sm" onclick="resetUpload()">&#10007; ${t('cancel')}</button>
+      </div>`;
+  }
+}
+
+function saveEdit(section) {
+  // Collect edited values and resubmit (for now, just reset)
+  resetUpload();
 }
 
 // ─── GUIDE ─────────────────────────────────────────────
