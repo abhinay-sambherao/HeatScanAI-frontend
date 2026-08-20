@@ -5,6 +5,9 @@ let selectedFiles = [];
 let locationData = { latitude: null, longitude: null, address: null, postal_code: null, city: null, installation_year: null };
 let cameraStream = null;
 
+const FUEL_I18N = { gas: 'fuel_gas', oil: 'fuel_oil', electricity: 'fuel_electric', biomass: 'fuel_biomass', solar: 'fuel_solar' };
+function tFuel(fuel) { return fuel ? (t(FUEL_I18N[fuel]) || fuel) : '-'; }
+
 // ─── I18N ──────────────────────────────────────────────
 const translations = {
   de: {
@@ -667,7 +670,7 @@ function renderResults(data) {
     { lbl: t('manufacturer'), val: data.manufacturer || t('not_detected') },
     { lbl: t('model'), val: data.model || t('not_detected') },
     { lbl: t('energy'), val: data.energy_class || '-' },
-    { lbl: t('fuel'), val: data.fuel_type ? (t('fuel_' + data.fuel_type) || data.fuel_type) : '-' },
+    { lbl: t('fuel'), val: tFuel(data.fuel_type) },
     { lbl: t('output'), val: data.heat_output || '-' },
     { lbl: t('ocr_confidence'), val: data.confidence.toFixed(1) + '%' },
   ];
@@ -689,7 +692,7 @@ function renderResults(data) {
         </div>
         <div class="match-details">
           ${m.energy_class ? `<span>${t('energy')}: ${m.energy_class}</span>` : ''}
-          ${m.fuel_type ? `<span>${t('fuel')}: ${t('fuel_' + m.fuel_type) || m.fuel_type}</span>` : ''}
+          ${m.fuel_type ? `<span>${t('fuel')}: ${tFuel(m.fuel_type)}</span>` : ''}
           ${m.heat_output ? `<span>${t('output')}: ${m.heat_output}</span>` : ''}
         </div>
         ${m.reason ? `<div class="match-reason">${m.reason}</div>` : ''}
@@ -739,7 +742,7 @@ function renderResults(data) {
         <div class="img-field"><span class="lbl">${t('manufacturer')}</span><span class="val">${img.manufacturer || '-'}</span></div>
         <div class="img-field"><span class="lbl">${t('model')}</span><span class="val">${img.model || '-'}</span></div>
         <div class="img-field"><span class="lbl">${t('energy')}</span><span class="val">${img.energy_class || '-'}</span></div>
-        <div class="img-field"><span class="lbl">${t('fuel')}</span><span class="val">${img.fuel_type || '-'}</span></div>
+        <div class="img-field"><span class="lbl">${t('fuel')}</span><span class="val">${tFuel(img.fuel_type)}</span></div>
         <div class="img-field"><span class="lbl">${t('output')}</span><span class="val">${img.heat_output || '-'}</span></div>
       </div>`).join('');
     const perImgBtn = `<button class="per-image-toggle" onclick="togglePerImage(this)" data-open="false">${t('per_image_results')} (${data.images.length})</button>`;
