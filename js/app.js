@@ -777,7 +777,6 @@ function togglePerImage(btn) {
 
 function editResults(section) {
   const area = document.getElementById('results-area');
-  // Find which box was clicked and make its fields editable
   const boxes = area.querySelectorAll('.results-box');
   const box = section === 'address' ? boxes[0] : boxes[1];
   if (!box) return;
@@ -794,20 +793,43 @@ function editResults(section) {
     val.replaceWith(input);
   });
 
-  // Replace the correct button with save/cancel
   const btn = box.querySelector('.btn-correct');
   if (btn) {
     btn.outerHTML = `
       <div class="edit-actions">
         <button class="btn btn-primary btn-sm" onclick="saveEdit('${section}')">&#10003; ${t('save')}</button>
-        <button class="btn btn-secondary btn-sm" onclick="resetUpload()">&#10007; ${t('cancel')}</button>
+        <button class="btn btn-secondary btn-sm" onclick="cancelEdit('${section}')">&#10007; ${t('cancel')}</button>
       </div>`;
   }
 }
 
+function cancelEdit(section) {
+  const data = window._lastScanData;
+  if (data) renderResults(data);
+}
+
 function saveEdit(section) {
-  // Collect edited values and resubmit (for now, just reset)
-  resetUpload();
+  const data = window._lastScanData;
+  if (!data) return;
+  const area = document.getElementById('results-area');
+  const boxes = area.querySelectorAll('.results-box');
+  const box = section === 'address' ? boxes[0] : boxes[1];
+  if (!box) return;
+
+  const inputs = box.querySelectorAll('.edit-input');
+  const fieldKeys = section === 'address'
+    ? ['address', 'postal_code', 'city', 'installation_year']
+    : ['manufacturer', 'model', 'energy_class', 'fuel_type', 'heat_output'];
+  inputs.forEach((input, i) => {
+    if (i < fieldKeys.length) {
+      const key = fieldKeys[i];
+      const val = input.value.trim();
+      data[key] = val || data[key];
+    }
+  });
+
+  window._lastScanData = data;
+  renderResults(data);
 }
 
 // ─── GUIDE ─────────────────────────────────────────────
