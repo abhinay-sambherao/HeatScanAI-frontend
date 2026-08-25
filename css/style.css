@@ -274,6 +274,14 @@ tr:hover td { background: rgba(0,0,0,.01); }
 .edit-actions { display: flex; gap: 8px; margin-top: 12px; }
 .btn-sm { padding: 5px 14px; font-size: 12px; }
 
+/* YEAR PROMPT */
+.year-prompt { background: var(--bg-card); border: 1px solid var(--secondary-gold); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 20px; }
+.year-prompt-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.year-prompt-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
+.year-prompt-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.year-prompt-input { width: 120px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-weight: 600; outline: none; transition: border-color .15s; }
+.year-prompt-input:focus { border-color: var(--primary); }
+
 .alternatives-section { margin-top: 24px; }
 .alternatives-section .alt-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
 .alternatives-section .alt-disclaimer { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6; }

@@ -135,6 +135,11 @@ const translations = {
     alt_disclaimer: 'Wir konnten Ihr System nicht exakt unserer Datenbank zuordnen. Daher zeigen wir den wahrscheinlichsten Treffer. Klicken Sie auf einen der folgenden Treffer, um die Ergebnisse anzuzeigen.',
     privacy_notice: 'Um Sie optimal zu Ihrer Heizung beraten zu können, verwenden wir für die Berechnung intern weitere Gebäudedaten, die basierend auf Ihrer Adresse ermittelt werden.',
     seems_incorrect: 'Scheint falsch zu sein? Helfen Sie uns, es zu verbessern',
+    year_prompt_title: 'Baujahr nicht erkannt',
+    year_prompt_sub: 'Geben Sie das Baujahr Ihrer Heizung ein, um die Treffer zu verfeinern:',
+    year_prompt_ph: 'Baujahr (z.B. 2015)',
+    year_prompt_submit: 'Treffer aktualisieren',
+    year_prompt_skip: 'Überspringen',
   },
   en: {
     gdpr_title: 'Privacy Notice',
@@ -261,6 +266,11 @@ const translations = {
     alt_disclaimer: 'We couldn\'t perfectly match your system to our database, so we show you the most likely one. Here, you can see other possible matches. Click on them to see their results.',
     privacy_notice: 'In order to provide you with the best possible advice regarding your heating system, we use additional building data for our internal calculations, which is determined based on your address.',
     seems_incorrect: 'Seems incorrect? Help us improve',
+    year_prompt_title: 'Year not detected',
+    year_prompt_sub: 'Enter your heating system\'s installation year to refine matches:',
+    year_prompt_ph: 'Installation year (e.g. 2015)',
+    year_prompt_submit: 'Update Matches',
+    year_prompt_skip: 'Skip',
   },
 };
 
@@ -654,6 +664,21 @@ function renderResults(data) {
   if (cityLine) addrLines.push(cityLine);
   if (data.installation_year) addrLines.push(`${t('year_of_install')} ${data.installation_year}`);
 
+  // Year prompt (shown when OCR didn't extract the year)
+  let yearPromptHtml = '';
+  if (!data.installation_year) {
+    yearPromptHtml = `
+      <div class="year-prompt" id="year-prompt">
+        <div class="year-prompt-title">${t('year_prompt_title')}</div>
+        <div class="year-prompt-sub">${t('year_prompt_sub')}</div>
+        <div class="year-prompt-row">
+          <input type="number" id="year-prompt-input" class="year-prompt-input" placeholder="${t('year_prompt_ph')}" min="1980" max="2030">
+          <button class="btn btn-primary btn-sm" onclick="submitYearPrompt()">${t('year_prompt_submit')}</button>
+          <button class="btn btn-secondary btn-sm" onclick="skipYearPrompt()">${t('year_prompt_skip')}</button>
+        </div>
+      </div>`;
+  }
+
   let mapHtml = '';
   if (data.latitude && data.longitude) {
     const lat = data.latitude, lng = data.longitude;
@@ -735,6 +760,7 @@ function renderResults(data) {
       </div>
     </div>
     ${imagesHtml}
+    ${yearPromptHtml}
     <div class="results-columns">
       ${addressBox}
       ${dataBox}
@@ -830,6 +856,45 @@ function saveEdit(section) {
 
   window._lastScanData = data;
   renderResults(data);
+}
+
+async function submitYearPrompt() {
+  const input = document.getElementById('year-prompt-input');
+  if (!input) return;
+  const year = parseInt(input.value, 10);
+  if (!year || year < 1980 || year > 2030) {
+    input.style.borderColor = '#e74c3c';
+    return;
+  }
+  const data = window._lastScanData;
+  if (!data || !data.ocr_result_id) return;
+
+  // Update local data immediately
+  data.installation_year = year;
+  window._lastScanData = data;
+
+  // Call rematch API
+  try {
+    const resp = await fetch(`${API}/ocr/${data.ocr_result_id}/rematch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ installation_year: year }),
+    });
+    if (resp.ok) {
+      const result = await resp.json();
+      data.matches = result.matches;
+      window._lastScanData = data;
+    }
+  } catch (e) {
+    console.warn('Rematch failed, showing local results:', e);
+  }
+
+  renderResults(data);
+}
+
+function skipYearPrompt() {
+  const prompt = document.getElementById('year-prompt');
+  if (prompt) prompt.style.display = 'none';
 }
 
 // ─── GUIDE ─────────────────────────────────────────────
