@@ -98,6 +98,9 @@ const translations = {
     match_variant: 'Modellvariante',
     match_brand: 'Gleicher Hersteller',
     match_attribute: 'Attributbasiert',
+    source: 'Quelle',
+    variants_label: 'Auch erhältlich als:',
+    retail_link: 'Im Onlineshop ansehen',
     retry: 'Neuer Scan',
     scanning_steps: ['Bild wird hochgeladen...', 'Vorverarbeitung (OpenCV)...', 'OCR läuft (PaddleOCR)...', 'Felder extrahieren...', 'Produkte abgleichen...', 'Fertig!'],
     uploading: 'Bild wird hochgeladen...',
@@ -233,6 +236,9 @@ const translations = {
     match_variant: 'Model variant',
     match_brand: 'Same manufacturer',
     match_attribute: 'Attribute-based',
+    source: 'Source',
+    variants_label: 'Also available as:',
+    retail_link: 'View in online shop',
     retry: 'Retry',
     scanning_steps: ['Uploading image...', 'Preprocessing (OpenCV)...', 'Running OCR (PaddleOCR)...', 'Extracting fields...', 'Matching products...', 'Done!'],
     uploading: 'Uploading image...',
@@ -737,7 +743,11 @@ function renderResults(data) {
   // Alternatives
   let alternativesHtml = '';
   if (data.matches && data.matches.length > 0) {
-    const matchCards = data.matches.map((m, i) => `
+    const matchCards = data.matches.map((m, i) => {
+      const variantsHtml = (m.variants && m.variants.length)
+        ? `<div class="match-variants"><span class="variants-label">${t('variants_label')}</span> ${m.variants.map(v => v.model).join('; ')}</div>`
+        : '';
+      return `
       <div class="match-card" ${i > 0 ? 'style="opacity:.85;"' : ''}>
         <div class="match-header">
           <h4>${m.manufacturer} ${m.model}</h4>
@@ -750,9 +760,13 @@ function renderResults(data) {
           ${m.energy_class ? `<span>${t('energy')}: ${m.energy_class}</span>` : ''}
           ${m.fuel_type ? `<span>${t('fuel')}: ${tFuel(m.fuel_type)}</span>` : ''}
           ${m.heat_output ? `<span>${t('output')}: ${m.heat_output}</span>` : ''}
+          ${m.source ? `<span class="match-source">${t('source')}: ${m.source}</span>` : ''}
         </div>
+        ${m.retail_url ? `<div class="match-retail"><a href="${m.retail_url}" target="_blank" rel="noopener">${m.retail_price != null ? m.retail_price + (m.retail_currency || '') + ' · ' : ''}${t('retail_link')}</a></div>` : ''}
+        ${variantsHtml}
         ${m.reason ? `<div class="match-reason">${m.reason}</div>` : ''}
-      </div>`).join('');
+      </div>`;
+    }).join('');
     alternativesHtml = `
       <div class="alternatives-section">
         <div class="alt-title">${t('alt_title')}</div>
