@@ -8,6 +8,22 @@ let cameraStream = null;
 const FUEL_I18N = { gas: 'fuel_gas', oil: 'fuel_oil', electricity: 'fuel_electric', biomass: 'fuel_biomass', solar: 'fuel_solar' };
 function tFuel(fuel) { return fuel ? (t(FUEL_I18N[fuel]) || fuel) : '-'; }
 
+const MATCH_TYPE_I18N = {
+  exact_model: 'match_exact',
+  model_variant: 'match_variant',
+  brand_only: 'match_brand',
+  attribute_match: 'match_attribute',
+};
+
+function matchTypeLabel(mt) {
+  if (!mt) return '';
+  return t(MATCH_TYPE_I18N[mt]) || mt;
+}
+
+function matchTypeCls(mt) {
+  return 'mt-' + (mt || 'unknown');
+}
+
 // ─── I18N ──────────────────────────────────────────────
 const translations = {
   de: {
@@ -78,6 +94,10 @@ const translations = {
     scan_results: 'Scan-Ergebnisse',
     confidence: 'Konfidenz',
     match: 'Übereinstimmung',
+    match_exact: 'Exakter Modelltreffer',
+    match_variant: 'Modellvariante',
+    match_brand: 'Gleicher Hersteller',
+    match_attribute: 'Attributbasiert',
     retry: 'Neuer Scan',
     scanning_steps: ['Bild wird hochgeladen...', 'Vorverarbeitung (OpenCV)...', 'OCR läuft (PaddleOCR)...', 'Felder extrahieren...', 'Produkte abgleichen...', 'Fertig!'],
     uploading: 'Bild wird hochgeladen...',
@@ -132,7 +152,7 @@ const translations = {
     data_title: 'Daten zu Ihrem Heizsystem',
     address_title: 'Adresse',
     alt_title: 'Alternative Treffer',
-    alt_disclaimer: 'Wir konnten Ihr System nicht exakt unserer Datenbank zuordnen. Daher zeigen wir den wahrscheinlichsten Treffer. Klicken Sie auf einen der folgenden Treffer, um die Ergebnisse anzuzeigen.',
+    alt_disclaimer: 'Wir konnten Ihr System nicht exakt in der Datenbank finden. Daher zeigen wir Ihnen den wahrscheinlichsten Treffer. Klicken Sie auf einen der folgenden Treffer, um die Ergebnisse anzusehen.',
     privacy_notice: 'Um Sie optimal zu Ihrer Heizung beraten zu können, verwenden wir für die Berechnung intern weitere Gebäudedaten, die basierend auf Ihrer Adresse ermittelt werden.',
     seems_incorrect: 'Scheint falsch zu sein? Helfen Sie uns, es zu verbessern',
     year_prompt_title: 'Baujahr nicht erkannt',
@@ -209,6 +229,10 @@ const translations = {
     scan_results: 'Scan Results',
     confidence: 'Confidence',
     match: 'Match',
+    match_exact: 'Exact model match',
+    match_variant: 'Model variant',
+    match_brand: 'Same manufacturer',
+    match_attribute: 'Attribute-based',
     retry: 'Retry',
     scanning_steps: ['Uploading image...', 'Preprocessing (OpenCV)...', 'Running OCR (PaddleOCR)...', 'Extracting fields...', 'Matching products...', 'Done!'],
     uploading: 'Uploading image...',
@@ -717,7 +741,10 @@ function renderResults(data) {
       <div class="match-card" ${i > 0 ? 'style="opacity:.85;"' : ''}>
         <div class="match-header">
           <h4>${m.manufacturer} ${m.model}</h4>
-          <span class="match-score">${m.score.toFixed(1)}% ${t('match')}</span>
+          <div class="match-header-right">
+            ${m.match_type ? `<span class="match-type ${matchTypeCls(m.match_type)}">${matchTypeLabel(m.match_type)}</span>` : ''}
+            <span class="match-score">${m.score.toFixed(1)}% ${t('match')}</span>
+          </div>
         </div>
         <div class="match-details">
           ${m.energy_class ? `<span>${t('energy')}: ${m.energy_class}</span>` : ''}
