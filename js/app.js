@@ -54,8 +54,8 @@ const translations = {
     camera_denied: 'Kamerazugriff verweigert. Bitte laden Sie stattdessen eine Datei hoch.',
     gps_error: 'Standort konnte nicht ermittelt werden: {msg}. Manuell eingeben oder überspringen.',
     geo_unsupported: 'Standortermittlung wird von Ihrem Browser nicht unterstützt.',
-    location_title: 'Standort & Baujahr',
-    location_sub: 'Wo und wann wurde diese Heizung installiert? Dies hilft bei der regionalen Identifikation und Altersbestimmung.',
+    location_title: 'Standort',
+    location_sub: 'Wo wurde diese Heizung installiert? Dies hilft bei der regionalen Identifikation.',
     loc_gps: 'Aktuellen Standort verwenden',
     loc_manual: 'Manuell eingeben',
     skip: 'Überspringen',
@@ -67,7 +67,7 @@ const translations = {
     install_year_ph: 'Baujahr (z.B. 2015)',
     confirm_location: 'Standort bestätigen',
     location: 'Standort',
-    add_location: 'Standort + Baujahr',
+    add_location: 'Standort',
     not_detected: 'Nicht erkannt',
     ocr_confidence: 'OCR-Konfidenz',
     matches_found: 'Gefundene Treffer',
@@ -185,8 +185,8 @@ const translations = {
     camera_denied: 'Camera access denied. Please upload a file instead.',
     gps_error: 'Could not get location: {msg}. Enter manually or skip.',
     geo_unsupported: 'Geolocation is not supported by your browser.',
-    location_title: 'Location & Installation Year',
-    location_sub: 'Where and when was this heating system installed? This helps with regional identification and age determination.',
+    location_title: 'Location',
+    location_sub: 'Where was this heating system installed? This helps with regional identification.',
     loc_gps: 'Use Current Location',
     loc_manual: 'Enter Manually',
     skip: 'Skip',
@@ -198,7 +198,7 @@ const translations = {
     install_year_ph: 'Installation year (e.g. 2015)',
     confirm_location: 'Confirm Location',
     location: 'Location',
-    add_location: 'Location + Year',
+    add_location: 'Location',
     not_detected: 'Not detected',
     ocr_confidence: 'OCR Confidence',
     matches_found: 'Matches Found',
@@ -387,7 +387,7 @@ function handleFiles(files) {
     <div class="image-gallery">${galleryHtml}</div>
     <div class="preview-info">
       <span>${t('images_count', { n: selectedFiles.length })}</span>
-      ${locInfo ? `<span class="location-badge" onclick="showLocationPrompt()">&#128205; ${locInfo}</span>` : `<span class="location-badge add" onclick="showLocationPrompt()">&#128205; <span data-i18n="add_location">Standort + Baujahr</span></span>`}
+      ${locInfo ? `<span class="location-badge" onclick="showLocationPrompt()">&#128205; ${locInfo}</span>` : `<span class="location-badge add" onclick="showLocationPrompt()">&#128205; <span data-i18n="add_location">Standort</span></span>`}
       <button class="btn btn-secondary" style="padding:4px 12px;font-size:12px;" onclick="resetUpload()">&times; ${t('clear')}</button>
     </div>`;
   area.style.display = 'block';
@@ -475,12 +475,8 @@ function closeLocation(skipped) {
   document.getElementById('location-modal').style.display = 'none';
   if (skipped) {
     locationData = { latitude: null, longitude: null, address: null, postal_code: null, city: null, installation_year: null };
-  } else {
-    const yr = parseInt(document.getElementById('loc-installation-year').value, 10);
-    locationData.installation_year = (isNaN(yr) || yr < 1980 || yr > 2030) ? null : yr;
   }
   // Reset modal fields
-  document.getElementById('loc-installation-year').value = '';
   document.getElementById('loc-address').value = '';
   document.getElementById('loc-postal').value = '';
   document.getElementById('loc-city').value = '';
@@ -501,7 +497,7 @@ function closeLocation(skipped) {
       <div class="image-gallery">${galleryHtml}</div>
       <div class="preview-info">
         <span>${t('images_count', { n: selectedFiles.length })}</span>
-        ${locInfo ? `<span class="location-badge" onclick="showLocationPrompt()">&#128205; ${locInfo}</span>` : `<span class="location-badge add" onclick="showLocationPrompt()">&#128205; <span data-i18n="add_location">Standort + Baujahr</span></span>`}
+        ${locInfo ? `<span class="location-badge" onclick="showLocationPrompt()">&#128205; ${locInfo}</span>` : `<span class="location-badge add" onclick="showLocationPrompt()">&#128205; <span data-i18n="add_location">Standort</span></span>`}
         <button class="btn btn-secondary" style="padding:4px 12px;font-size:12px;" onclick="resetUpload()">&times; ${t('clear')}</button>
       </div>`;
   }
@@ -615,7 +611,6 @@ async function runOCR() {
     if (locationData.address) formData.append('address', locationData.address);
     if (locationData.postal_code) formData.append('postal_code', locationData.postal_code);
     if (locationData.city) formData.append('city', locationData.city);
-    if (locationData.installation_year) formData.append('installation_year', locationData.installation_year);
 
     const res = await fetch(`${API}/ocr`, { method: 'POST', body: formData });
     clearInterval(stepInterval);

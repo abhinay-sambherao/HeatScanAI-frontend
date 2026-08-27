@@ -182,14 +182,11 @@
 <div id="location-modal" class="modal" style="display:none;">
   <div class="modal-content">
     <div class="modal-header">
-      <h3 data-i18n="location_title">Standort & Baujahr</h3>
+      <h3 data-i18n="location_title">Standort</h3>
       <button class="modal-close" onclick="closeLocation(true)">&times;</button>
     </div>
     <div class="modal-body">
-      <p style="margin-bottom:16px;color:var(--text-secondary);font-size:14px;" data-i18n="location_sub">Wo und wann wurde diese Heizung installiert? Dies hilft bei der regionalen Identifikation und Altersbestimmung.</p>
-      <div class="form-row" style="margin-bottom:16px;">
-        <input type="number" id="loc-installation-year" data-i18n-placeholder="install_year_ph" placeholder="Baujahr (z.B. 2015)" min="1980" max="2030" class="form-input" style="flex:1;">
-      </div>
+      <p style="margin-bottom:16px;color:var(--text-secondary);font-size:14px;" data-i18n="location_sub">Wo wurde diese Heizung installiert? Dies hilft bei der regionalen Identifikation.</p>
       <div class="location-options">
         <button class="btn btn-primary loc-btn" onclick="getGPSLocation()">&#128205; <span data-i18n="loc_gps">Aktuellen Standort verwenden</span></button>
         <button class="btn btn-secondary loc-btn" onclick="showManualLocation()">&#9998; <span data-i18n="loc_manual">Manuell eingeben</span></button>
