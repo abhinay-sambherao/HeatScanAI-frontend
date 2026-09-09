@@ -1,9 +1,18 @@
-// API base URL — override via <script>window.__API__='...'</script> (e.g. a Netlify
-// snippet / env var) or a deployed tunnel URL; defaults to the local backend.
-const API = (typeof window !== 'undefined' && window.__API__) || 'http://127.0.0.1:8000';
+// API base URL — override via <script>window.__API__='https://api.example.com'</script>.
+// When __API__ is '' and the page is served from the backend (:8000), use same-origin.
+// When opened via Live Server (:5500) or similar, auto-target the backend on :8000.
+function resolveApiBase() {
+  if (typeof window === 'undefined') return 'http://127.0.0.1:8000';
+  if (window.__API__ != null && window.__API__ !== '') return window.__API__;
+  const { protocol, hostname, port } = window.location;
+  if (!port || port === '8000') return '';
+  return protocol + '//' + hostname + ':8000';
+}
+const API = resolveApiBase();
 let selectedFiles = [];
 let locationData = { latitude: null, longitude: null, address: null, postal_code: null, city: null, installation_year: null };
 let cameraStream = null;
+let matchPollTimer = null;
 
 const FUEL_I18N = { gas: 'fuel_gas', oil: 'fuel_oil', electricity: 'fuel_electric', biomass: 'fuel_biomass', solar: 'fuel_solar' };
 function tFuel(fuel) { return fuel ? (t(FUEL_I18N[fuel]) || fuel) : '-'; }
@@ -22,6 +31,93 @@ function matchTypeLabel(mt) {
 
 function matchTypeCls(mt) {
   return 'mt-' + (mt || 'unknown');
+}
+
+/** Split product vs retail matches and pick honest section copy for the UI. */
+function getMatchPresentation(matches) {
+  const all = matches || [];
+  const productMatches = all.filter(m => m.match_type !== 'retail');
+  const retailMatches = all.filter(m => m.match_type === 'retail');
+  if (!productMatches.length) {
+    return { mode: 'none', productMatches, retailMatches, titleKey: null, disclaimerKey: null, othersKey: null };
+  }
+  const top = productMatches[0];
+  const modelScore = top.matched_attributes?.model?.score ?? 0;
+  if (top.match_type === 'exact_model' && (top.score >= 70 || modelScore >= 85)) {
+    return {
+      mode: 'identified',
+      productMatches,
+      retailMatches,
+      titleKey: 'match_title_identified',
+      disclaimerKey: 'match_disclaimer_identified',
+      othersKey: productMatches.length > 1 ? 'match_others_label' : null,
+    };
+  }
+  if (top.match_type === 'model_variant' && top.score >= 65) {
+    return {
+      mode: 'best',
+      productMatches,
+      retailMatches,
+      titleKey: 'match_title_best',
+      disclaimerKey: 'match_disclaimer_best',
+      othersKey: productMatches.length > 1 ? 'match_others_label' : null,
+    };
+  }
+  if (top.score >= 55 && (top.match_type === 'exact_model' || top.match_type === 'model_variant')) {
+    return {
+      mode: 'likely',
+      productMatches,
+      retailMatches,
+      titleKey: 'match_title_likely',
+      disclaimerKey: 'match_disclaimer_likely',
+      othersKey: productMatches.length > 1 ? 'match_others_label' : null,
+    };
+  }
+  return {
+    mode: 'alternatives',
+    productMatches,
+    retailMatches,
+    titleKey: 'alt_title',
+    disclaimerKey: 'alt_disclaimer',
+    othersKey: null,
+  };
+}
+
+function formatMatchScore(m) {
+  const modelScore = m.matched_attributes?.model?.score;
+  if (m.match_type === 'exact_model' && modelScore >= 80) {
+    return `${modelScore.toFixed(1)}% ${t('model_match')}`;
+  }
+  return `${m.score.toFixed(1)}% ${t('match')}`;
+}
+
+function renderMatchCard(m, opts = {}) {
+  const { primary = false, dimmed = false } = opts;
+  const variantsHtml = (m.variants && m.variants.length)
+    ? `<div class="match-variants"><span class="variants-label">${t('variants_label')}</span> ${m.variants.map(v => v.model).join('; ')}</div>`
+    : '';
+  const cls = ['match-card', primary ? 'match-card-primary' : '', dimmed ? 'match-card-dimmed' : ''].filter(Boolean).join(' ');
+  return `
+    <div class="${cls}">
+      <div class="match-header">
+        <h4>${m.manufacturer} ${m.model}</h4>
+        <div class="match-header-right">
+          ${m.match_type ? `<span class="match-type ${matchTypeCls(m.match_type)}">${matchTypeLabel(m.match_type)}</span>` : ''}
+          <span class="match-score">${formatMatchScore(m)}</span>
+        </div>
+      </div>
+      <div class="match-details">
+        ${m.energy_class ? `<span>${t('energy')}: ${m.energy_class}</span>` : ''}
+        ${m.fuel_type ? `<span>${t('fuel')}: ${tFuel(m.fuel_type)}</span>` : ''}
+        ${m.heat_output ? `<span>${t('output')}: ${m.heat_output}</span>` : ''}
+        ${m.eprel_url
+          ? `<span class="match-source"><a href="${m.eprel_url}" target="_blank" rel="noopener">${t('source')}: EPREL #${m.eprel_id} · ${t('eprel_verify')}</a></span>`
+          : (m.source ? `<span class="match-source">${t('source')}: ${m.source}</span>` : '')}
+      </div>
+      ${m.retail_url ? `<div class="match-retail"><a href="${m.retail_url}" target="_blank" rel="noopener">${m.retail_price != null ? m.retail_price + (m.retail_currency || '') + ' · ' : ''}${t('retail_link')}</a></div>` : ''}
+      ${variantsHtml}
+      ${m.reason ? `<div class="match-reason">${m.reason}</div>` : ''}
+    </div>`;
 }
 
 // ─── I18N ──────────────────────────────────────────────
@@ -69,6 +165,8 @@ const translations = {
     cancel: 'Abbrechen',
     camera_denied: 'Kamerazugriff verweigert. Bitte laden Sie stattdessen eine Datei hoch.',
     gps_error: 'Standort konnte nicht ermittelt werden: {msg}. Manuell eingeben oder überspringen.',
+    gps_insecure: 'Standortermittlung ist nur über eine sichere (HTTPS) Verbindung verfügbar. Bitte Standort manuell eingeben.',
+    gps_denied: 'Zugriff auf Ihren Standort wurde verweigert. Bitte Standort manuell eingeben.',
     geo_unsupported: 'Standortermittlung wird von Ihrem Browser nicht unterstützt.',
     location_title: 'Standort',
     location_sub: 'Wo wurde diese Heizung installiert? Dies hilft bei der regionalen Identifikation.',
@@ -99,6 +197,7 @@ const translations = {
     match_brand: 'Gleicher Hersteller',
     match_attribute: 'Attributbasiert',
     source: 'Quelle',
+    eprel_verify: 'In EPREL prüfen',
     variants_label: 'Auch erhältlich als:',
     retail_link: 'Im Onlineshop ansehen',
     retry: 'Neuer Scan',
@@ -155,7 +254,15 @@ const translations = {
     data_title: 'Daten zu Ihrem Heizsystem',
     address_title: 'Adresse',
     alt_title: 'Alternative Treffer',
-    alt_disclaimer: 'Wir konnten Ihr System nicht exakt in der Datenbank finden. Daher zeigen wir Ihnen den wahrscheinlichsten Treffer. Klicken Sie auf einen der folgenden Treffer, um die Ergebnisse anzusehen.',
+    alt_disclaimer: 'Wir konnten Ihr System nicht sicher in der Datenbank identifizieren. Nachfolgend sehen Sie die wahrscheinlichsten Treffer.',
+    match_title_identified: 'Identifiziertes Produkt',
+    match_disclaimer_identified: 'Ihr Heizsystem wurde in der EPREL-Datenbank gefunden. Der Treffer basiert auf Hersteller und Modellbezeichnung vom Typenschild.',
+    match_title_best: 'Bester Treffer',
+    match_disclaimer_best: 'Wir haben ein passendes Produkt gefunden. Bitte prüfen Sie Modell und Leistung, falls mehrere Varianten existieren.',
+    match_title_likely: 'Wahrscheinlicher Treffer',
+    match_disclaimer_likely: 'Der folgende Treffer passt am ehesten zu Ihrem Typenschild. Weitere Varianten sind möglich.',
+    match_others_label: 'Weitere mögliche Treffer',
+    model_match: 'Modelltreffer',
     privacy_notice: 'Um Sie optimal zu Ihrer Heizung beraten zu können, verwenden wir für die Berechnung intern weitere Gebäudedaten, die basierend auf Ihrer Adresse ermittelt werden.',
     seems_incorrect: 'Scheint falsch zu sein? Helfen Sie uns, es zu verbessern',
     year_prompt_title: 'Baujahr nicht erkannt',
@@ -163,6 +270,8 @@ const translations = {
     year_prompt_ph: 'Baujahr (z.B. 2015)',
     year_prompt_submit: 'Treffer aktualisieren',
     year_prompt_skip: 'Überspringen',
+    match_search_running: 'Weitere Produkte werden im Hintergrund gesucht…',
+    match_search_complete: 'Produktsuche abgeschlossen',
   },
   en: {
     gdpr_title: 'Privacy Notice',
@@ -207,6 +316,8 @@ const translations = {
     cancel: 'Cancel',
     camera_denied: 'Camera access denied. Please upload a file instead.',
     gps_error: 'Could not get location: {msg}. Enter manually or skip.',
+    gps_insecure: 'Location is only available over a secure (HTTPS) connection. Please enter the location manually.',
+    gps_denied: 'Access to your location was denied. Please enter the location manually.',
     geo_unsupported: 'Geolocation is not supported by your browser.',
     location_title: 'Location',
     location_sub: 'Where was this heating system installed? This helps with regional identification.',
@@ -237,6 +348,7 @@ const translations = {
     match_brand: 'Same manufacturer',
     match_attribute: 'Attribute-based',
     source: 'Source',
+    eprel_verify: 'Verify on EPREL',
     variants_label: 'Also available as:',
     retail_link: 'View in online shop',
     retry: 'Retry',
@@ -293,7 +405,15 @@ const translations = {
     data_title: 'Data about your heating system',
     address_title: 'Address',
     alt_title: 'Alternative Matches',
-    alt_disclaimer: 'We couldn\'t perfectly match your system to our database, so we show you the most likely one. Here, you can see other possible matches. Click on them to see their results.',
+    alt_disclaimer: 'We could not confidently identify your system in the database. Below are the most likely matches.',
+    match_title_identified: 'Identified Product',
+    match_disclaimer_identified: 'Your heating system was found in the EPREL database based on the manufacturer and model read from your nameplate.',
+    match_title_best: 'Best Match',
+    match_disclaimer_best: 'We found a matching product. Please verify model and output if several variants exist.',
+    match_title_likely: 'Likely Match',
+    match_disclaimer_likely: 'The match below best fits your nameplate. Other variants may still apply.',
+    match_others_label: 'Other possible matches',
+    model_match: 'Model match',
     privacy_notice: 'In order to provide you with the best possible advice regarding your heating system, we use additional building data for our internal calculations, which is determined based on your address.',
     seems_incorrect: 'Seems incorrect? Help us improve',
     year_prompt_title: 'Year not detected',
@@ -301,6 +421,8 @@ const translations = {
     year_prompt_ph: 'Installation year (e.g. 2015)',
     year_prompt_submit: 'Update Matches',
     year_prompt_skip: 'Skip',
+    match_search_running: 'Searching for more products in the background…',
+    match_search_complete: 'Product search complete',
   },
 };
 
@@ -316,6 +438,19 @@ function t(key, vars) {
     for (const k in vars) val = val.replace('{' + k + '}', vars[k]);
   }
   return val;
+}
+
+/** Parse JSON safely — avoids "Unexpected end of JSON input" on empty error bodies. */
+async function parseJsonResponse(res) {
+  const text = await res.text();
+  if (!text || !text.trim()) {
+    throw new Error(res.ok ? 'Empty response from server' : `Server error (${res.status})`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error(`Invalid server response (${res.status})`);
+  }
 }
 
 function applyI18n() {
@@ -436,6 +571,7 @@ function removeFile(index) {
 }
 
 function resetUpload() {
+  stopMatchPolling();
   selectedFiles.forEach(f => URL.revokeObjectURL(f));
   selectedFiles = [];
   locationData = { latitude: null, longitude: null, address: null, postal_code: null, city: null, installation_year: null };
@@ -538,6 +674,11 @@ function getGPSLocation() {
     alert(t('geo_unsupported'));
     return;
   }
+  if (window.isSecureContext !== true) {
+    alert(t('gps_insecure'));
+    showManualLocation();
+    return;
+  }
   navigator.geolocation.getCurrentPosition(
     pos => {
       locationData.latitude = pos.coords.latitude;
@@ -554,7 +695,12 @@ function getGPSLocation() {
         .finally(() => closeLocation(false));
     },
     err => {
-      alert(t('gps_error', { msg: err.message }));
+      const code = err && err.code;
+      if (code === window.PositionError && (window.PositionError.PERMISSION_DENIED === code)) {
+        alert(t('gps_denied'));
+      } else {
+        alert(t('gps_error', { msg: err.message }));
+      }
     },
     { enableHighAccuracy: true, timeout: 10000 }
   );
@@ -573,6 +719,8 @@ function confirmManualLocation() {
   const lng = parseFloat(document.getElementById('loc-longitude').value);
   locationData.latitude = isNaN(lat) ? null : lat;
   locationData.longitude = isNaN(lng) ? null : lng;
+  const yr = parseInt(document.getElementById('loc-year').value, 10);
+  locationData.installation_year = (!isNaN(yr) && yr >= 1900 && yr <= 2030) ? yr : null;
   document.getElementById('manual-location-form').style.display = 'none';
   document.querySelector('.location-options').style.display = 'flex';
   closeLocation(false);
@@ -641,16 +789,17 @@ async function runOCR() {
     if (locationData.address) formData.append('address', locationData.address);
     if (locationData.postal_code) formData.append('postal_code', locationData.postal_code);
     if (locationData.city) formData.append('city', locationData.city);
+    if (locationData.installation_year) formData.append('installation_year', locationData.installation_year);
 
     const res = await fetch(`${API}/ocr`, { method: 'POST', body: formData });
     clearInterval(stepInterval);
 
+    const data = await parseJsonResponse(res);
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || t('error_ocr'));
+      const detail = data.detail;
+      const msg = typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail.map(d => d.msg).join('; ') : null);
+      throw new Error(msg || t('error_ocr'));
     }
-
-    const data = await res.json();
     document.getElementById('progress-fill').style.width = '100%';
     document.getElementById('scan-main-icon').innerHTML = '&#10004;';
     document.getElementById('progress-steps').innerHTML = steps.map((s, i) =>
@@ -658,6 +807,11 @@ async function runOCR() {
     ).join('');
     setTimeout(() => { progressArea.style.display = 'none'; }, 500);
     renderResults(data);
+    if (data.match_search_status === 'running') {
+      startMatchPolling(data.ocr_result_id);
+    } else {
+      stopMatchPolling();
+    }
   } catch (err) {
     clearInterval(stepInterval);
     progressArea.style.display = 'none';
@@ -666,6 +820,36 @@ async function runOCR() {
 
   btn.disabled = false;
   btn.innerHTML = '&#9654; ' + t('scan_now');
+}
+
+function stopMatchPolling() {
+  if (matchPollTimer) {
+    clearInterval(matchPollTimer);
+    matchPollTimer = null;
+  }
+}
+
+async function pollMatches(ocrResultId) {
+  try {
+    const resp = await fetch(`${API}/ocr/${ocrResultId}/matches`);
+    if (!resp.ok) return;
+    const result = await parseJsonResponse(resp);
+    const data = window._lastScanData;
+    if (!data || data.ocr_result_id !== ocrResultId) return;
+    data.matches = result.matches;
+    data.match_search_status = result.match_search_status;
+    if (result.installation_year != null) data.installation_year = result.installation_year;
+    window._lastScanData = data;
+    renderResults(data);
+    if (result.match_search_status === 'complete') stopMatchPolling();
+  } catch (e) {
+    console.warn('Match poll failed:', e);
+  }
+}
+
+function startMatchPolling(ocrResultId) {
+  stopMatchPolling();
+  matchPollTimer = setInterval(() => pollMatches(ocrResultId), 2000);
 }
 
 function renderResults(data) {
@@ -689,9 +873,9 @@ function renderResults(data) {
   if (cityLine) addrLines.push(cityLine);
   if (data.installation_year) addrLines.push(`${t('year_of_install')} ${data.installation_year}`);
 
-  // Year prompt (shown when OCR didn't extract the year)
+  // Year prompt — only when OCR did not extract Baujahr/Herstellungsdatum
   let yearPromptHtml = '';
-  if (!data.installation_year) {
+  if (data.year_prompt_needed) {
     yearPromptHtml = `
       <div class="year-prompt" id="year-prompt">
         <div class="year-prompt-title">${t('year_prompt_title')}</div>
@@ -703,6 +887,10 @@ function renderResults(data) {
         </div>
       </div>`;
   }
+
+  const searchStatusHtml = data.match_search_status === 'running'
+    ? `<div class="match-search-status running" id="match-search-status">&#8987; ${t('match_search_running')}</div>`
+    : '';
 
   let mapHtml = '';
   if (data.latitude && data.longitude) {
@@ -725,14 +913,14 @@ function renderResults(data) {
     </div>`;
 
   // Data box
-  const dataFields = [
-    { lbl: t('manufacturer'), val: data.manufacturer || t('not_detected') },
-    { lbl: t('model'), val: data.model || t('not_detected') },
-    { lbl: t('energy'), val: data.energy_class || '-' },
-    { lbl: t('fuel'), val: tFuel(data.fuel_type) },
-    { lbl: t('output'), val: data.heat_output || '-' },
-    { lbl: t('ocr_confidence'), val: data.confidence.toFixed(1) + '%' },
-  ];
+  const dataFields = [];
+  if (data.manufacturer) dataFields.push({ lbl: t('manufacturer'), val: data.manufacturer });
+  if (data.model) dataFields.push({ lbl: t('model'), val: data.model });
+  if (data.installation_year) dataFields.push({ lbl: t('year_of_install'), val: data.installation_year });
+  if (data.energy_class) dataFields.push({ lbl: t('energy'), val: data.energy_class });
+  if (data.fuel_type) dataFields.push({ lbl: t('fuel'), val: tFuel(data.fuel_type) });
+  if (data.heat_output) dataFields.push({ lbl: t('output'), val: data.heat_output });
+  dataFields.push({ lbl: t('ocr_confidence'), val: data.confidence.toFixed(1) + '%' });
   const dataBox = `
     <div class="results-box">
       <div class="box-title">${t('data_title')}</div>
@@ -740,43 +928,33 @@ function renderResults(data) {
       <button class="btn-correct" onclick="editResults('data')">&#9998; ${t('seems_incorrect')}</button>
     </div>`;
 
-  // Alternatives
+  // Product matches — copy and layout depend on how confident the top hit is
   let alternativesHtml = '';
-  if (data.matches && data.matches.length > 0) {
-    const matchCards = data.matches.map((m, i) => {
-      const variantsHtml = (m.variants && m.variants.length)
-        ? `<div class="match-variants"><span class="variants-label">${t('variants_label')}</span> ${m.variants.map(v => v.model).join('; ')}</div>`
-        : '';
-      return `
-      <div class="match-card" ${i > 0 ? 'style="opacity:.85;"' : ''}>
-        <div class="match-header">
-          <h4>${m.manufacturer} ${m.model}</h4>
-          <div class="match-header-right">
-            ${m.match_type ? `<span class="match-type ${matchTypeCls(m.match_type)}">${matchTypeLabel(m.match_type)}</span>` : ''}
-            <span class="match-score">${m.score.toFixed(1)}% ${t('match')}</span>
-          </div>
-        </div>
-        <div class="match-details">
-          ${m.energy_class ? `<span>${t('energy')}: ${m.energy_class}</span>` : ''}
-          ${m.fuel_type ? `<span>${t('fuel')}: ${tFuel(m.fuel_type)}</span>` : ''}
-          ${m.heat_output ? `<span>${t('output')}: ${m.heat_output}</span>` : ''}
-          ${m.source ? `<span class="match-source">${t('source')}: ${m.source}</span>` : ''}
-        </div>
-        ${m.retail_url ? `<div class="match-retail"><a href="${m.retail_url}" target="_blank" rel="noopener">${m.retail_price != null ? m.retail_price + (m.retail_currency || '') + ' · ' : ''}${t('retail_link')}</a></div>` : ''}
-        ${variantsHtml}
-        ${m.reason ? `<div class="match-reason">${m.reason}</div>` : ''}
-      </div>`;
-    }).join('');
-    alternativesHtml = `
-      <div class="alternatives-section">
-        <div class="alt-title">${t('alt_title')}</div>
-        <div class="alt-disclaimer">${t('alt_disclaimer')}</div>
-        ${matchCards}
-      </div>`;
-  } else {
+  const presentation = getMatchPresentation(data.matches);
+  if (presentation.mode === 'none') {
     alternativesHtml = `
       <div class="alternatives-section">
         <div class="empty"><div class="icon">&#128269;</div><p>${t('no_matches')}</p></div>
+      </div>`;
+  } else {
+    const [primary, ...others] = presentation.productMatches;
+    const primaryHtml = primary ? renderMatchCard(primary, { primary: presentation.mode === 'identified' }) : '';
+    const othersHtml = others.length
+      ? `<div class="match-others">
+          <div class="match-others-label">${t(presentation.othersKey || 'match_others_label')}</div>
+          ${others.map(m => renderMatchCard(m, { dimmed: true })).join('')}
+        </div>`
+      : '';
+    const retailHtml = presentation.retailMatches.length
+      ? `<div class="match-retail-section">${presentation.retailMatches.map(m => renderMatchCard(m)).join('')}</div>`
+      : '';
+    alternativesHtml = `
+      <div class="alternatives-section match-mode-${presentation.mode}">
+        <div class="alt-title">${t(presentation.titleKey)}</div>
+        <div class="alt-disclaimer">${t(presentation.disclaimerKey)}</div>
+        ${primaryHtml}
+        ${othersHtml}
+        ${retailHtml}
       </div>`;
   }
 
@@ -797,6 +975,7 @@ function renderResults(data) {
     </div>
     ${imagesHtml}
     ${yearPromptHtml}
+    ${searchStatusHtml}
     <div class="results-columns">
       ${addressBox}
       ${dataBox}
@@ -905,11 +1084,10 @@ async function submitYearPrompt() {
   const data = window._lastScanData;
   if (!data || !data.ocr_result_id) return;
 
-  // Update local data immediately
   data.installation_year = year;
+  data.year_prompt_needed = false;
   window._lastScanData = data;
 
-  // Call rematch API
   try {
     const resp = await fetch(`${API}/ocr/${data.ocr_result_id}/rematch`, {
       method: 'POST',
@@ -917,9 +1095,12 @@ async function submitYearPrompt() {
       body: JSON.stringify({ installation_year: year }),
     });
     if (resp.ok) {
-      const result = await resp.json();
+      const result = await parseJsonResponse(resp);
       data.matches = result.matches;
+      data.match_search_status = result.match_search_status || 'complete';
+      data.year_prompt_needed = result.year_prompt_needed === true;
       window._lastScanData = data;
+      stopMatchPolling();
     }
   } catch (e) {
     console.warn('Rematch failed, showing local results:', e);
@@ -929,6 +1110,11 @@ async function submitYearPrompt() {
 }
 
 function skipYearPrompt() {
+  const data = window._lastScanData;
+  if (data) {
+    data.year_prompt_needed = false;
+    window._lastScanData = data;
+  }
   const prompt = document.getElementById('year-prompt');
   if (prompt) prompt.style.display = 'none';
 }
@@ -1138,7 +1324,7 @@ async function loadDashboard() {
 // ─── INIT ──────────────────────────────────────────────
 function checkHealth(attemptsLeft) {
   attemptsLeft = attemptsLeft === undefined ? 3 : attemptsLeft;
-  fetch(`${API}/health`).then(r => r.json()).then(d => {
+  fetch(`${API}/health`).then(r => parseJsonResponse(r)).then(d => {
     document.getElementById('status-text').textContent = t('connected');
     initProductBrowser();
   }).catch(() => {
