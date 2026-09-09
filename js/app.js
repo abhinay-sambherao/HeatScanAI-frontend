@@ -871,7 +871,6 @@ function renderResults(data) {
   if (data.address) addrLines.push(data.address);
   const cityLine = [data.postal_code, data.city].filter(Boolean).join(' ');
   if (cityLine) addrLines.push(cityLine);
-  if (data.installation_year) addrLines.push(`${t('year_of_install')} ${data.installation_year}`);
 
   // Year prompt — only when OCR did not extract Baujahr/Herstellungsdatum
   let yearPromptHtml = '';
